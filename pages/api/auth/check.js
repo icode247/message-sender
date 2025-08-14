@@ -1,5 +1,6 @@
-import { getTokenFromRequest, verifyToken } from '../../../lib/auth';
-import { prisma } from '../../../lib/db';
+// pages/api/auth/check.js - Updated version
+import { getTokenFromRequest, verifyToken } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {

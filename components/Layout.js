@@ -1,26 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { LogOut, Mail, Users, Send } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Layout({ children }) {
     const router = useRouter();
-    const [user, setUser] = useState(null);
-
-    useEffect(() => {
-        // Get user info from localStorage or context
-        const userInfo = localStorage.getItem('user');
-        if (userInfo) {
-            setUser(JSON.parse(userInfo));
-        }
-    }, []);
+    const { user, logout } = useAuth();
 
     const handleLogout = async () => {
         try {
-            await fetch('/api/auth/logout', {
-                method: 'POST',
-            });
-            localStorage.removeItem('user');
-            router.push('/login');
+            await logout();
         } catch (error) {
             console.error('Logout failed:', error);
         }
