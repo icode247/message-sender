@@ -1,5 +1,4 @@
 import '../styles/globals.css';
-import 'react-quill/dist/quill.snow.css';
 import { AuthProvider } from '../contexts/AuthContext';
 
 function MyApp({ Component, pageProps }) {

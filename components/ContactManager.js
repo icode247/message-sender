@@ -1,28 +1,33 @@
-import { useState, useEffect, useRef } from 'react';
-import { Upload, UserPlus, Trash2, Download, Search } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Upload, UserPlus, Trash2, Download, Search, Loader } from 'lucide-react';
 import Papa from 'papaparse';
 
 export default function ContactManager({ onSelectionChange }) {
     const [contacts, setContacts] = useState([]);
-    const [filteredContacts, setFilteredContacts] = useState([]);
+    const [displayedContacts, setDisplayedContacts] = useState([]);
     const [selectedContacts, setSelectedContacts] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [showAddForm, setShowAddForm] = useState(false);
     const [newContact, setNewContact] = useState({ email: '', name: '' });
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
     const fileInputRef = useRef(null);
+    const observerTarget = useRef(null);
+
+    // Pagination settings
+    const ITEMS_PER_PAGE = 20;
 
     useEffect(() => {
         fetchContacts();
     }, []);
 
     useEffect(() => {
-        // Filter contacts based on search term
-        const filtered = contacts.filter(contact =>
-            contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            contact.name?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        setFilteredContacts(filtered);
+        // Reset pagination when search term changes
+        setCurrentPage(1);
+        setHasMore(true);
+        filterAndPaginateContacts(1, searchTerm);
     }, [contacts, searchTerm]);
 
     useEffect(() => {
@@ -31,6 +36,28 @@ export default function ContactManager({ onSelectionChange }) {
             onSelectionChange(selectedContacts);
         }
     }, [selectedContacts, onSelectionChange]);
+
+    // Intersection Observer for infinite scroll
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+                    loadMoreContacts();
+                }
+            },
+            { threshold: 1.0, rootMargin: '50px' }
+        );
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => {
+            if (observerTarget.current) {
+                observer.unobserve(observerTarget.current);
+            }
+        };
+    }, [hasMore, isLoadingMore]);
 
     const fetchContacts = async () => {
         try {
@@ -45,6 +72,36 @@ export default function ContactManager({ onSelectionChange }) {
             setIsLoading(false);
         }
     };
+
+    const filterAndPaginateContacts = useCallback((page = 1, search = searchTerm) => {
+        // Filter contacts based on search term
+        const filtered = contacts.filter(contact =>
+            contact.email.toLowerCase().includes(search.toLowerCase()) ||
+            contact.name?.toLowerCase().includes(search.toLowerCase())
+        );
+
+        // Calculate pagination
+        const startIndex = 0;
+        const endIndex = page * ITEMS_PER_PAGE;
+        const paginatedContacts = filtered.slice(startIndex, endIndex);
+
+        setDisplayedContacts(paginatedContacts);
+        setHasMore(endIndex < filtered.length);
+    }, [contacts, searchTerm]);
+
+    const loadMoreContacts = useCallback(() => {
+        if (isLoadingMore || !hasMore) return;
+
+        setIsLoadingMore(true);
+
+        // Simulate network delay for better UX
+        setTimeout(() => {
+            const nextPage = currentPage + 1;
+            setCurrentPage(nextPage);
+            filterAndPaginateContacts(nextPage, searchTerm);
+            setIsLoadingMore(false);
+        }, 300);
+    }, [currentPage, searchTerm, hasMore, isLoadingMore, filterAndPaginateContacts]);
 
     const handleFileUpload = (event) => {
         const file = event.target.files[0];
@@ -142,10 +199,24 @@ export default function ContactManager({ onSelectionChange }) {
     };
 
     const handleSelectAll = () => {
-        if (selectedContacts.length === filteredContacts.length) {
+        // Get all filtered contacts (not just displayed ones)
+        const filtered = contacts.filter(contact =>
+            contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            contact.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        if (selectedContacts.length === filtered.length) {
             setSelectedContacts([]);
         } else {
-            setSelectedContacts([...filteredContacts]);
+            setSelectedContacts([...filtered]);
+        }
+    };
+
+    const handleSelectAllDisplayed = () => {
+        if (selectedContacts.length === displayedContacts.length) {
+            setSelectedContacts([]);
+        } else {
+            setSelectedContacts([...displayedContacts]);
         }
     };
 
@@ -162,6 +233,13 @@ export default function ContactManager({ onSelectionChange }) {
         link.download = 'contacts.csv';
         link.click();
         URL.revokeObjectURL(url);
+    };
+
+    const getFilteredContactsCount = () => {
+        return contacts.filter(contact =>
+            contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            contact.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        ).length;
     };
 
     if (isLoading) {
@@ -183,7 +261,12 @@ export default function ContactManager({ onSelectionChange }) {
         <div className="bg-white shadow rounded-lg p-6">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-medium text-gray-900">
-                    Contacts ({filteredContacts.length})
+                    Contacts ({getFilteredContactsCount()})
+                    {searchTerm && (
+                        <span className="text-sm text-gray-500 ml-2">
+                            (showing {displayedContacts.length})
+                        </span>
+                    )}
                 </h2>
 
                 <div className="flex space-x-3">
@@ -294,59 +377,94 @@ export default function ContactManager({ onSelectionChange }) {
 
             {/* Contacts Table */}
             <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedContacts.length === filteredContacts.length && filteredContacts.length > 0}
-                                    onChange={handleSelectAll}
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Email
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Name
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Actions
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredContacts.map((contact) => (
-                            <tr key={contact.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedContacts.some(c => c.id === contact.id)}
-                                        onChange={(e) => handleContactSelection(contact, e.target.checked)}
-                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {contact.email}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {contact.name || '-'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <button
-                                        onClick={() => handleDeleteContact(contact.id)}
-                                        className="text-red-600 hover:text-red-900"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </td>
+                <div className="max-h-96 overflow-y-auto">
+                    <table className="min-w-full divide-y divide-gray-300">
+                        <thead className="bg-gray-50 sticky top-0 z-10">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <div className="flex items-center space-x-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={displayedContacts.length > 0 && selectedContacts.length === displayedContacts.length}
+                                            onChange={handleSelectAllDisplayed}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <button
+                                            onClick={handleSelectAll}
+                                            className="text-xs text-blue-600 hover:text-blue-800"
+                                            title="Select all filtered contacts"
+                                        >
+                                            All
+                                        </button>
+                                    </div>
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Email
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Name
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Actions
+                                </th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {displayedContacts.map((contact) => (
+                                <tr key={contact.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedContacts.some(c => c.id === contact.id)}
+                                            onChange={(e) => handleContactSelection(contact, e.target.checked)}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {contact.email}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {contact.name || '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <button
+                                            onClick={() => handleDeleteContact(contact.id)}
+                                            className="text-red-600 hover:text-red-900"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
 
-                {filteredContacts.length === 0 && (
+                    {/* Loading more indicator */}
+                    {isLoadingMore && (
+                        <div className="flex justify-center items-center py-4">
+                            <Loader className="w-5 h-5 animate-spin text-blue-600 mr-2" />
+                            <span className="text-sm text-gray-600">Loading more contacts...</span>
+                        </div>
+                    )}
+
+                    {/* Intersection Observer Target */}
+                    {hasMore && !isLoadingMore && displayedContacts.length > 0 && (
+                        <div ref={observerTarget} className="h-4 flex justify-center items-center">
+                            <span className="text-xs text-gray-400">Scroll to load more</span>
+                        </div>
+                    )}
+
+                    {/* End of results indicator */}
+                    {!hasMore && displayedContacts.length > ITEMS_PER_PAGE && (
+                        <div className="flex justify-center items-center py-4">
+                            <span className="text-sm text-gray-500">
+                                End of results ({displayedContacts.length} contacts shown)
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                {displayedContacts.length === 0 && (
                     <div className="text-center py-12">
                         <p className="text-sm text-gray-500">
                             {searchTerm ? 'No contacts found matching your search.' : 'No contacts yet. Add some contacts to get started.'}

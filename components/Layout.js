@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { LogOut, Mail, Users, Send } from 'lucide-react';
+import { LogOut, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Layout({ children }) {
@@ -17,8 +16,7 @@ export default function Layout({ children }) {
 
     const navigation = [
         { name: 'Dashboard', href: '/dashboard', icon: Mail },
-        { name: 'Contacts', href: '/contacts', icon: Users },
-        { name: 'Send Email', href: '/send', icon: Send },
+
     ];
 
     return (
@@ -42,8 +40,8 @@ export default function Layout({ children }) {
                                             key={item.name}
                                             onClick={() => router.push(item.href)}
                                             className={`${router.pathname === item.href
-                                                    ? 'border-blue-500 text-gray-900'
-                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                ? 'border-blue-500 text-gray-900'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                 } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center`}
                                         >
                                             <Icon className="h-4 w-4 mr-2" />

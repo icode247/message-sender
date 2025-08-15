@@ -1,37 +1,55 @@
 import { NextResponse } from 'next/server';
-import { verifyToken } from './lib/auth';
 
-export function middleware(request) {
+async function verifyTokenEdge(token) {
+    try {
+        const secret = process.env.JWT_SECRET;
+        if (!secret || !token) {
+            return null;
+        }
+
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            return null;
+        }
+
+        const [header, payload, signature] = parts;
+        
+        const decodedPayload = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+        
+        if (decodedPayload.exp && Date.now() >= decodedPayload.exp * 1000) {
+            return null;
+        }
+        
+        return decodedPayload;
+    } catch (error) {
+        return null;
+    }
+}
+
+export async function middleware(request) {
     const token = request.cookies.get('token')?.value;
     const { pathname } = request.nextUrl;
 
-    // Public paths that don't require authentication
-    const publicPaths = ['/login', '/api/auth/login', '/api/auth/check'];
-
-    // Allow public paths and static files
+    const publicPaths = ['/login', '/api/auth/login', '/api/auth/logout'];
+    
     if (publicPaths.includes(pathname) ||
         pathname.startsWith('/_next/') ||
-        pathname.startsWith('/api/auth/') ||
-        pathname.includes('.')) {
+        pathname.includes('.') ||
+        pathname.startsWith('/api/auth/')) {
         return NextResponse.next();
     }
 
-    // Check if user is authenticated
     if (!token) {
-        console.log('No token found, redirecting to login');
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    const decoded = verifyToken(token);
+    const decoded = await verifyTokenEdge(token);
     if (!decoded) {
-        console.log('Invalid token, redirecting to login');
-        // Clear invalid token
         const response = NextResponse.redirect(new URL('/login', request.url));
         response.cookies.set('token', '', { maxAge: 0 });
         return response;
     }
 
-    // Add user ID to headers for API routes
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-user-id', decoded.userId);
 

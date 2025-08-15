@@ -1,5 +1,4 @@
-// pages/api/auth/check.js - Updated version
-import { getTokenFromRequest, verifyToken } from '@/lib/auth';
+import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export default async function handler(req, res) {
@@ -8,13 +7,19 @@ export default async function handler(req, res) {
     }
 
     try {
-        const token = getTokenFromRequest(req);
+        // Get token from cookie or Authorization header
+        const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+
+        console.log('Token from cookies:', req.cookies?.token);
+        console.log('Token from headers:', req.headers.authorization);
+        console.log('Final token:', token);
 
         if (!token) {
             return res.status(401).json({ message: 'No token provided' });
         }
 
         const decoded = verifyToken(token);
+        console.log('Decoded token:', decoded);
 
         if (!decoded) {
             return res.status(401).json({ message: 'Invalid token' });

@@ -26,7 +26,6 @@ export const AuthProvider = ({ children }) => {
                 setUser(null);
             }
         } catch (error) {
-            console.error('Auth check failed:', error);
             setUser(null);
         } finally {
             setLoading(false);
@@ -44,6 +43,11 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify({ email, password }),
             });
 
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
+
             const data = await response.json();
 
             if (response.ok) {
@@ -54,7 +58,9 @@ export const AuthProvider = ({ children }) => {
                 throw new Error(data.message || 'Login failed');
             }
         } catch (error) {
-            console.error('Login failed:', error);
+            if (error.message.includes('non-JSON')) {
+                throw new Error('Server error - please check if the application is running correctly');
+            }
             throw error;
         }
     };
@@ -68,8 +74,6 @@ export const AuthProvider = ({ children }) => {
             setUser(null);
             router.push('/login');
         } catch (error) {
-            console.error('Logout failed:', error);
-            // Even if logout fails on server, clear user state
             setUser(null);
             router.push('/login');
         }
