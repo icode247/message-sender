@@ -1,7 +1,9 @@
+// pages/api/emails/send.js
 import { resend } from '../../../lib/resend';
-import { prisma } from '../../../lib/db';
+import { db } from '../../../lib/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 import { getTokenFromRequest, verifyToken } from '../../../lib/auth';
-//emailData
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ message: 'Method not allowed' });
@@ -27,10 +29,10 @@ export default async function handler(req, res) {
         return res.status(400).json({ message: 'No recipients specified' });
     }
 
-    try {
-        const results = [];
-        const errors = [];
+    const results = [];
+    const errors = [];
 
+    try {
         // Function to personalize content for each recipient
         const personalizeContent = (htmlContent, recipient) => {
             if (!personalizeNames) return htmlContent;
@@ -39,7 +41,7 @@ export default async function handler(req, res) {
                 .replace(/\{\{NAME\}\}/g, recipient.name || 'Valued Customer')
                 .replace(/\{\{EMAIL\}\}/g, recipient.email)
                 .replace(/\{\{FIRST_NAME\}\}/g, (recipient.name || '').split(' ')[0] || 'Friend')
-                .replace(/\{\{COMPANY_NAME\}\}/g, 'Your Company') // You can make this configurable
+                .replace(/\{\{COMPANY_NAME\}\}/g, 'FastApply')
                 .replace(/\{\{NEWSLETTER_SUBTITLE\}\}/g, 'Weekly Newsletter')
                 .replace(/\{\{COMPANY_ADDRESS\}\}/g, '123 Main St, City, State 12345');
         };
@@ -52,7 +54,7 @@ export default async function handler(req, res) {
                 .replace(/\{\{NAME\}\}/g, recipient.name || 'Valued Customer')
                 .replace(/\{\{EMAIL\}\}/g, recipient.email)
                 .replace(/\{\{FIRST_NAME\}\}/g, (recipient.name || '').split(' ')[0] || 'Friend')
-                .replace(/\{\{COMPANY_NAME\}\}/g, 'Your Company');
+                .replace(/\{\{COMPANY_NAME\}\}/g, 'FastApply');
         };
 
         // Send emails in batches to avoid rate limits
@@ -81,17 +83,18 @@ export default async function handler(req, res) {
 
                 // Prepare email data
                 const emailData = {
-                    from: `Fastapply <${fromEmail}>`,
+                    from: `FastApply <${fromEmail}>`,
                     to: recipient.email,
                     subject: personalizedSubject,
                     html: finalContent,
                 };
 
-                // Add tags only if they're supported (some email providers don't support tags)
+                // Add tags if supported
                 if (process.env.RESEND_API_KEY) {
                     emailData.tags = [
                         { name: 'campaign_type', value: useTemplate ? 'newsletter' : 'basic' },
-                        { name: 'personalized', value: personalizeNames ? 'yes' : 'no' }
+                        { name: 'personalized', value: personalizeNames ? 'yes' : 'no' },
+                        { name: 'source', value: 'fastapply_admin' }
                     ];
                 }
 
@@ -135,27 +138,53 @@ export default async function handler(req, res) {
                 });
             }
 
-            // Small delay to respect rate limits (adjust based on your email provider)
+            // Small delay to respect rate limits
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        // Save campaign to database
+        // Save campaign to Firebase
         try {
-            await prisma.campaign.create({
-                data: {
-                    subject: subject,
-                    content: content,
-                    sentAt: new Date(),
-                    userId: decoded.userId,
-                    recipientCount: recipients.length,
-                    successCount: results.length,
-                    failureCount: errors.length,
-                    isPersonalized: personalizeNames,
-                    templateUsed: useTemplate,
-                },
+            await addDoc(collection(db, 'campaigns'), {
+                subject: subject,
+                content: content,
+                sentAt: new Date(),
+                userId: decoded.userId,
+                recipientCount: recipients.length,
+                successCount: results.length,
+                failureCount: errors.length,
+                isPersonalized: personalizeNames,
+                templateUsed: useTemplate,
+                templateType: useTemplate ? 'custom' : 'basic',
+                emailProvider: 'resend',
+                campaignTags: JSON.stringify({
+                    campaign_type: useTemplate ? 'newsletter' : 'basic',
+                    personalized: personalizeNames ? 'yes' : 'no',
+                    source: 'fastapply_admin'
+                }),
+                createdAt: new Date(),
+                updatedAt: new Date()
             });
+
+            // Also save email analytics for each sent email
+            const analyticsPromises = results.map(result =>
+                addDoc(collection(db, 'emailAnalytics'), {
+                    campaignId: 'manual_send_' + Date.now(),
+                    recipientEmail: result.email,
+                    emailId: result.id,
+                    status: 'sent',
+                    timestamp: new Date(),
+                    metadata: JSON.stringify({
+                        recipientName: result.name,
+                        personalized: personalizeNames,
+                        templateUsed: useTemplate
+                    })
+                })
+            );
+
+            await Promise.all(analyticsPromises);
+
         } catch (dbError) {
-            console.error('Failed to save campaign to database:', dbError);
+            console.error('Failed to save campaign to Firebase:', dbError);
         }
 
         // Return detailed results
@@ -178,7 +207,7 @@ export default async function handler(req, res) {
             message: 'Failed to send emails',
             error: error.message,
             sent: results.length,
-            failed: error.length
+            failed: errors.length
         });
     }
 }

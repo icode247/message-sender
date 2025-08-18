@@ -1,5 +1,6 @@
+// components/Layout.js
 import { useRouter } from 'next/router';
-import { LogOut, Mail } from 'lucide-react';
+import { LogOut, Briefcase, BarChart3, Mail, Users, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Layout({ children }) {
@@ -15,8 +16,8 @@ export default function Layout({ children }) {
     };
 
     const navigation = [
-        { name: 'Dashboard', href: '/dashboard', icon: Mail },
-
+        { name: 'Analytics', href: '/dashboard', icon: BarChart3 },
+        { name: 'Email Marketing', href: '/dashboard', icon: Mail },
     ];
 
     return (
@@ -27,9 +28,12 @@ export default function Layout({ children }) {
                     <div className="flex justify-between h-16">
                         <div className="flex">
                             <div className="flex-shrink-0 flex items-center">
-                                <Mail className="h-8 w-8 text-blue-600" />
+                                <Briefcase className="h-8 w-8 text-blue-600" />
                                 <span className="ml-2 text-xl font-bold text-gray-900">
-                                    Email Sender
+                                    FastApply
+                                </span>
+                                <span className="ml-2 text-sm text-gray-500 font-normal">
+                                    Admin Dashboard
                                 </span>
                             </div>
                             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
