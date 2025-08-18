@@ -1,7 +1,7 @@
 import { resend } from '../../../lib/resend';
 import { prisma } from '../../../lib/db';
 import { getTokenFromRequest, verifyToken } from '../../../lib/auth';
-
+//emailData
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ message: 'Method not allowed' });
@@ -14,10 +14,10 @@ export default async function handler(req, res) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { 
-        subject, 
-        content, 
-        recipients, 
+    const {
+        subject,
+        content,
+        recipients,
         fromEmail = 'hello@fastapply.co',
         personalizeNames = true,
         useTemplate = false
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
 
                 // Prepare email data
                 const emailData = {
-                    from: fromEmail,
+                    from: `Fastapply <${fromEmail}>`,
                     to: recipient.email,
                     subject: personalizedSubject,
                     html: finalContent,
@@ -118,7 +118,7 @@ export default async function handler(req, res) {
 
             } catch (error) {
                 console.error(`❌ Failed to send email to ${recipient.email}:`, error);
-                
+
                 // Extract meaningful error message
                 let errorMessage = error.message;
                 if (error.response?.data?.message) {
@@ -156,7 +156,6 @@ export default async function handler(req, res) {
             });
         } catch (dbError) {
             console.error('Failed to save campaign to database:', dbError);
-            // Continue anyway - email sending is more important than logging
         }
 
         // Return detailed results
@@ -175,8 +174,8 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Send email error:', error);
-        res.status(500).json({ 
-            message: 'Failed to send emails', 
+        res.status(500).json({
+            message: 'Failed to send emails',
             error: error.message,
             sent: results.length,
             failed: error.length
